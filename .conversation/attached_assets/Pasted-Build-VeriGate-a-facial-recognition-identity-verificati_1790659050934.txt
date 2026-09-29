@@ -1,0 +1,46 @@
+Build "VeriGate" — a facial-recognition identity verification web app for school pickups and residential estate gates.
+
+PRODUCT CONTEXT
+VeriGate replaces manual sign-out sheets, gate codes, and staff memory with real-time identity verification. Two access-control scenarios:
+1. School pickup: a guardian or their authorised backup collects a specific child.
+2. Estate gate: a resident or a pre-approved, time-windowed visitor enters a specific household's premises.
+
+Every verification produces a clear VERIFIED / NOT VERIFIED / CONFIRM MANUALLY decision plus an auditable log entry — never a silent guess.
+
+TECH STACK
+- React + Tailwind CSS + shadcn/ui (your defaults)
+- Supabase for: auth (email/password, roles: admin, gate_staff), Postgres (profiles, verification_events, sites tables), and Storage (enrolment + capture photos)
+- Real face detection/recognition in the browser using face-api.js (load tinyFaceDetector, faceLandmark68Net, and faceRecognitionNet models from a CDN). Compute a 128-d face descriptor on capture; store it as a vector column (or JSON array) linked to each profile; match by Euclidean distance between descriptors (typical match threshold ~0.5-0.6, confirm-manually band ~0.6-0.75, deny above that — make this a tunable constant).
+- Real camera access via getUserMedia with a graceful "upload a photo instead" fallback if permission is denied or no camera is found. Never let a camera request hang without a visible timeout/error.
+
+DATA MODEL (Supabase)
+- sites: id, name, type ("school" | "estate")
+- profiles: id, site_id, name, role ("guardian" | "backup_pickup" | "resident" | "visitor"), linked_to (free text: child/household), status ("active" | "revoked"), face_descriptor (float array), photo_url, visitor_window_start/end (nullable, for visitors), created_at
+- verification_events: id, site_id, matched_profile_id (nullable), gate_name, result ("verified" | "denied" | "override"), similarity_score, decision_ms, staff_id, override_reason (nullable), flagged_suspicious (bool), created_at
+
+CORE SCREENS
+1. Overview / Home — brief explanation of the product, the happy-path and failure-path journey (enrol → scan → decide → log), and live summary stats (Verified Handover Rate, median verification speed, override rate) pulled from verification_events.
+
+2. Enrol — form (name, role, linked child/household, optional visitor time window) + face capture via webcam or photo upload. On capture, run face detection, compute the descriptor, show a live preview with a bounding box, require an explicit consent checkbox before saving ("I consent to a facial biometric being stored for identity verification only, retained for active enrolment + 90 days, deletable on request"). Save profile + descriptor + photo to Supabase.
+
+3. Gate Verification — toggle between "School Gate" and "Estate Gate". Live camera view (or photo upload fallback) with a "Scan" button. On scan: detect the face, compute its descriptor, compare against all active profiles for the selected site, and show one of three states:
+   - VERIFIED (green): matched profile's name, photo, role, relationship, similarity score, decision time. Auto-logs a "verified" event.
+   - CONFIRM MANUALLY (amber): best match below the auto-approve threshold. Shows the closest candidate and a "Confirm" / "Run manual fallback" action. Staff decision is required and logged as "override" with a reason field.
+   - NOT VERIFIED (red): no match above the deny threshold. Offers "Run manual fallback" and "Flag as suspicious" (flagging alerts admin — for MVP, just write flagged_suspicious=true and show a toast; no real SMS needed).
+
+4. Admin Dashboard — table of verification_events (filterable by site/date/result), summary cards (Verified Handover Rate, median speed, override rate, flagged count), and a directory of all profiles with an "Active / Revoke" toggle (revoking sets status="revoked" and must immediately block future matches, even if the face still matches).
+
+DESIGN SYSTEM
+- Primary: navy #16233F (headers, primary buttons, trust/authority tone)
+- Accent: teal #0E7C7B (active states, links)
+- Success/Verified: green #1E8E3E — Danger/Denied: red #D93025 — Warning/Fallback: amber #B8860B
+- Clean sans-serif (system font stack or Inter), generous spacing, status always shown as color + icon + text label together (never color alone)
+- Mobile-friendly: gate staff will often use this on a tablet at a gate
+
+NON-FUNCTIONAL REQUIREMENTS
+- Verification decision should render in well under 3 seconds after capture
+- Camera errors/permission denials must show a clear inline message and fall back to photo upload — never a silently stuck button
+- Role-based access: gate_staff can use Enrol + Gate Verification; only admin sees the Admin Dashboard and can revoke profiles
+- All verification attempts are logged, including denied and overridden ones — this audit trail is a core feature, not an afterthought
+
+Build the Enrol and Gate Verification flows first (the core loop), then the Admin Dashboard. Use realistic seed data (2-3 demo profiles per site) so the app is testable immediately after first build.

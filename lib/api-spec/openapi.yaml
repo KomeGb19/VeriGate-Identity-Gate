@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: VeriGate identity verification API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: sites
+    description: Verification sites
+  - name: profiles
+    description: Enrolment profiles
+  - name: verification
+    description: Gate verification and audit events
+  - name: dashboard
+    description: Verification analytics
 paths:
   /healthz:
     get:
@@ -24,7 +32,154 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /sites:
+    get:
+      operationId: listSites
+      tags: [sites]
+      summary: List verification sites
+      responses:
+        "200":
+          description: Available sites
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Site"
+  /sites/{siteId}/profiles:
+    get:
+      operationId: listProfiles
+      tags: [profiles]
+      summary: List enrolment profiles for a site
+      parameters:
+        - $ref: "#/components/parameters/SiteId"
+      responses:
+        "200":
+          description: Enrolment profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+  /profiles:
+    post:
+      operationId: createProfile
+      tags: [profiles]
+      summary: Create an enrolment profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileInput"
+      responses:
+        "201":
+          description: Created profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+  /profiles/{profileId}/status:
+    patch:
+      operationId: updateProfileStatus
+      tags: [profiles]
+      summary: Activate or revoke an enrolment profile
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileStatusInput"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+  /verification/decide:
+    post:
+      operationId: decideVerification
+      tags: [verification]
+      summary: Decide and log a gate verification attempt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerificationDecisionInput"
+      responses:
+        "201":
+          description: Verification decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationEvent"
+  /verification-events:
+    get:
+      operationId: listVerificationEvents
+      tags: [verification]
+      summary: List verification audit events
+      parameters:
+        - name: siteId
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: result
+          in: query
+          schema:
+            type: ["string", "null"]
+            enum: [verified, denied, override]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Verification audit events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VerificationEvent"
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get verification summary metrics
+      parameters:
+        - name: siteId
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
 components:
+  parameters:
+    SiteId:
+      name: siteId
+      in: path
+      required: true
+      schema:
+        type: string
+    ProfileId:
+      name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +188,157 @@ components:
           type: string
       required:
         - status
+    Site:
+      type: object
+      required: [id, name, type]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [school, estate]
+    Profile:
+      type: object
+      required: [id, siteId, name, role, linkedTo, status, photoUrl, createdAt]
+      properties:
+        id:
+          type: string
+        siteId:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [guardian, backup_pickup, resident, visitor]
+        linkedTo:
+          type: string
+        status:
+          type: string
+          enum: [active, revoked]
+        photoUrl:
+          type: string
+        faceDescriptor:
+          type: ["array", "null"]
+          items:
+            type: number
+        visitorWindowStart:
+          type: ["string", "null"]
+          format: date-time
+        visitorWindowEnd:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ProfileInput:
+      type: object
+      required: [siteId, name, role, linkedTo, photoUrl]
+      properties:
+        siteId:
+          type: string
+        name:
+          type: string
+          minLength: 2
+        role:
+          type: string
+          enum: [guardian, backup_pickup, resident, visitor]
+        linkedTo:
+          type: string
+          minLength: 2
+        photoUrl:
+          type: string
+        visitorWindowStart:
+          type: ["string", "null"]
+          format: date-time
+        visitorWindowEnd:
+          type: ["string", "null"]
+          format: date-time
+        faceDescriptor:
+          type: ["array", "null"]
+          items:
+            type: number
+    ProfileStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [active, revoked]
+    VerificationDecisionInput:
+      type: object
+      required: [siteId, gateName, result, similarityScore, decisionMs]
+      properties:
+        siteId:
+          type: string
+        matchedProfileId:
+          type: ["string", "null"]
+        gateName:
+          type: string
+        result:
+          type: string
+          enum: [verified, denied, override]
+        similarityScore:
+          type: number
+          minimum: 0
+          maximum: 1
+        decisionMs:
+          type: integer
+          minimum: 0
+        faceDescriptor:
+          type: ["array", "null"]
+          items:
+            type: number
+        overrideReason:
+          type: ["string", "null"]
+        flaggedSuspicious:
+          type: boolean
+          default: false
+    VerificationEvent:
+      type: object
+      required: [id, siteId, matchedProfileId, gateName, result, similarityScore, decisionMs, staffId, overrideReason, flaggedSuspicious, createdAt]
+      properties:
+        id:
+          type: string
+        siteId:
+          type: string
+        matchedProfileId:
+          type: ["string", "null"]
+        gateName:
+          type: string
+        result:
+          type: string
+          enum: [verified, denied, override]
+        similarityScore:
+          type: number
+        decisionMs:
+          type: integer
+        staffId:
+          type: string
+        overrideReason:
+          type: ["string", "null"]
+        flaggedSuspicious:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    DashboardSummary:
+      type: object
+      required: [totalAttempts, verifiedHandoverRate, medianVerificationSpeed, overrideRate, flaggedCount, recentEvents]
+      properties:
+        totalAttempts:
+          type: integer
+        verifiedHandoverRate:
+          type: number
+        medianVerificationSpeed:
+          type: integer
+        overrideRate:
+          type: number
+        flaggedCount:
+          type: integer
+        recentEvents:
+          type: array
+          items:
+            $ref: "#/components/schemas/VerificationEvent"
 

@@ -1,6 +1,6 @@
-# [Project name]
+# VeriGate Identity Gate
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+VeriGate helps school and estate gate staff enrol trusted people, make explicit face-verification decisions, and keep an audit trail for every attempt.
 
 ## Run & Operate
 
@@ -22,15 +22,25 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/verigate/src/App.tsx` — responsive overview, enrolment, gate verification, and admin screens.
+- `artifacts/verigate/src/index.css` — VeriGate visual tokens and responsive UI styles.
+- `lib/api-spec/openapi.yaml` — source of truth for sites, profiles, decisions, events, and dashboard summary APIs.
+- `artifacts/api-server/src/routes/verigate.ts` — API handlers and demo seed data.
+- `lib/db/src/schema/` — Drizzle tables for sites, profiles, and verification events.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The first build uses the workspace PostgreSQL database and Drizzle rather than an external database connection so the demo data, schema, and rollback behavior stay inside the project.
+- Face capture supports real browser camera access, upload fallback, and face-api.js descriptor generation; every decision still requires an explicit operator action and is logged.
+- API startup seeding is guarded against concurrent first requests so parallel dashboard queries cannot duplicate demo rows.
+- The app defaults to an admin demo role and includes a gate-staff role switch so the admin-only surface can be exercised before managed authentication is connected.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Overview metrics and recent gate activity.
+- Consent-gated enrolment with camera or upload capture and optional visitor windows.
+- School and estate gate verification with verified, manual confirmation, and not-verified decisions.
+- Filterable audit log, suspicious flags, and immediate profile revocation/reactivation.
 
 ## User preferences
 
@@ -38,7 +48,9 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- After changing `lib/api-spec/openapi.yaml`, run `pnpm --filter @workspace/api-spec run codegen` before checking the server or frontend.
+- Preview and API workflows are managed artifact services; restart `artifacts/api-server: API Server` and `artifacts/verigate: web` after code changes that affect runtime behavior.
+- Face-api.js models load from a CDN in the browser. If they are unavailable, the UI keeps camera/upload capture available and makes the manual review path explicit.
 
 ## Pointers
 

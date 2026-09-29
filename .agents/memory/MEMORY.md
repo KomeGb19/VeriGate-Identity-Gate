@@ -1,0 +1,1 @@
+- [Concurrent seed safety](concurrent-seed-safety.md) — startup demo seeding must be guarded so parallel first requests cannot duplicate rows.
